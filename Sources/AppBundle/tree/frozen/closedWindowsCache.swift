@@ -7,7 +7,7 @@ import Common
 /// becomes nil, etc.) which tricks AeroSpace into thinking that all windows were closed.
 /// That's why every time a window dies AeroSpace caches the "entire world" (unless window is already presented in the cache)
 /// so that once the screen is unlocked, AeroSpace could restore windows to where they were
-@MainActor private var closedWindowsCache = FrozenWorld(workspaces: [], monitors: [], windowIds: [])
+@MainActor private var closedWindowsCache = FrozenWorld(workspaces: [], windowIds: [])
 
 struct FrozenMonitor: Sendable {
     let topLeftCorner: CGPoint
@@ -45,7 +45,6 @@ struct FrozenWorkspace: Sendable {
     }
     closedWindowsCache = FrozenWorld(
         workspaces: allWs.map { FrozenWorkspace($0) },
-        monitors: monitorInfos.map(FrozenMonitor.init),
         windowIds: allWindowIds,
     )
 }
@@ -56,6 +55,15 @@ struct FrozenWorkspace: Sendable {
     }
     let monitors = monitorInfos
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
+    // Focus can change after caching; recover layout without restoring an old workspace selection.
+    let currentMonitors = monitors.map(FrozenMonitor.init)
+    defer {
+        for monitor in currentMonitors {
+            _ = topLeftCornerToMonitor[monitor.topLeftCorner]?
+                .singleOrNil()?
+                .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))
+        }
+    }
 
     for frozenWorkspace in closedWindowsCache.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
@@ -77,11 +85,6 @@ struct FrozenWorkspace: Sendable {
         }
     }
 
-    for monitor in closedWindowsCache.monitors {
-        _ = topLeftCornerToMonitor[monitor.topLeftCorner]?
-            .singleOrNil()?
-            .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))
-    }
     return true
 }
 
@@ -122,5 +125,5 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
 // That's why we have to reset the cache every time layout changes. The layout can only be changed by running commands
 // and with mouse manipulations
 @MainActor func resetClosedWindowsCache() {
-    closedWindowsCache = FrozenWorld(workspaces: [], monitors: [], windowIds: [])
+    closedWindowsCache = FrozenWorld(workspaces: [], windowIds: [])
 }

@@ -44,12 +44,23 @@ import AppKit
             }
             if let window {
                 try await runLightSession(.focusFollowsMouse, token) {
-                    _ = window.focusWindow()
-                    window.nativeFocus()
+                    _ = focusHoveredWindowIfWorkspaceUnchanged(
+                        window,
+                        capturedWorkspace: workspace,
+                        currentWorkspace: location.monitorApproximation.activeWorkspace,
+                    )
                 }
             }
         }
     }
+}
+
+@MainActor
+func focusHoveredWindowIfWorkspaceUnchanged(_ window: Window, capturedWorkspace: Workspace, currentWorkspace: Workspace) -> Bool {
+    guard capturedWorkspace === currentWorkspace, window.nodeWorkspace === capturedWorkspace else { return false }
+    _ = window.focusWindow()
+    window.nativeFocus()
+    return true
 }
 
 @concurrent
